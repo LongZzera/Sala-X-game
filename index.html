@@ -80,6 +80,30 @@
         .memory-card.flipped { background: #fff; color: #000; }
         .memory-card.matched { background: lime; color: #000; border-color: lime; }
 
+        /* JOYSTICK CONTROLS */
+        #joystick-area {
+            position: absolute; bottom: 30px; right: 30px; 
+            display: flex; flex-direction: column; align-items: center; gap: 10px;
+            pointer-events: auto; /* Permite clicar nos botões */
+            z-index: 100;
+        }
+        .joy-row { display: flex; gap: 10px; }
+        .joy-btn {
+            width: 60px; height: 60px; background: rgba(255, 255, 255, 0.2);
+            border: 2px solid rgba(255, 255, 255, 0.5); border-radius: 10px;
+            color: white; font-size: 30px; display: flex; align-items: center; justify-content: center;
+            cursor: pointer; user-select: none; -webkit-user-select: none;
+            touch-action: manipulation;
+        }
+        .joy-btn:active, .joy-btn.active { background: rgba(0, 255, 0, 0.4); border-color: lime; }
+        
+        /* Ajuste para mobile: mover HUD para cima para não cobrir joystick se necessário, ou manter separado */
+        @media (max-width: 600px) {
+            #stats-hud { bottom: auto; top: 20px; left: 20px; width: 200px; font-size: 18px; }
+            #joystick-area { bottom: 20px; right: 20px; }
+            #day-hud { font-size: 30px; top: 10px; right: 10px; }
+        }
+
         @keyframes blink { 0% {opacity: 1;} 50% {opacity: 0;} 100% {opacity: 1;} }
     </style>
 </head>
@@ -89,7 +113,7 @@
     <div id="ui-layer">
         <div id="crosshair"></div>
         
-        <div id="monitor-warning">⚠ MONITOR SE APROXIMA! ⚠</div>
+        <div id="monitor-warning">⚠ HELITON SE APROXIMA! ⚠</div>
         <div id="message-area">Mensagem do Sistema</div>
         
         <div id="day-hud" class="hud-panel">DIA <span id="day-val">1</span></div>
@@ -105,13 +129,25 @@
             </div>
             <div style="margin-top: 5px; color: yellow;" id="code-collection">Códigos: _ _ _ _</div>
         </div>
+
+        <!-- JOYSTICK VISUAL -->
+        <div id="joystick-area">
+            <div class="joy-row">
+                <div class="joy-btn" id="btn-up">▲</div>
+            </div>
+            <div class="joy-row">
+                <div class="joy-btn" id="btn-left">◀</div>
+                <div class="joy-btn" id="btn-down">▼</div>
+                <div class="joy-btn" id="btn-right">▶</div>
+            </div>
+        </div>
     </div>
 
     <!-- START SCREEN -->
     <div id="start-screen" class="overlay-screen">
         <h1>SALA X</h1>
         <p>Regras: Sobreviva 7 DIAS. Fuja do Corvo Darci.</p>
-        <p>Encontre 4 CADERNOS por dia para pegar o código.</p>
+        <p>O monitor Heliton fiscaliza uniformes.</p>
         <button id="btn-start">COMEÇAR DIA 1</button>
     </div>
 
@@ -174,8 +210,8 @@
             tempRateUp: 1.5,    
             tempRateDown: 0.8,  
             stalkerSpeed: 4.0, 
-            monitorCycle: 30,     
-            stalkerCycle: 15,   // Um pouco mais de tempo entre ataques
+            monitorCycle: 30, // Tempo entre inspeções    
+            stalkerCycle: 15,   
             stalkerDuration: 8 
         };
 
@@ -208,7 +244,7 @@
             hasJacket: true,
             codesFound: [],     
             finalCode: [],      
-            currentMathAnswer: 0, // Guarda resposta da conta atual para o hint
+            currentMathAnswer: 0,
             isPaused: false,
             isHiding: false,
             inDoor: false,
@@ -234,6 +270,8 @@
         let jacketObj = null; 
         let crowGroup = null; 
         let crowWings = []; 
+        let monitorGroup = null; // O Monitor Humano
+        let monitorLimbs = []; // Pernas e braços para animar
         let lockers = []; 
         let walls = [];   
         let notebooks = []; 
@@ -288,13 +326,11 @@
 
             controls = new PointerLockControls(camera, document.body);
             
-            // Start Button Logic
             const startBtn = document.getElementById('btn-start');
             startBtn.addEventListener('click', () => {
                 startGamePlay();
             });
 
-            // Next Day Button Logic
             const nextDayBtn = document.getElementById('btn-next-day');
             nextDayBtn.addEventListener('click', () => {
                 nextDay();
@@ -302,14 +338,55 @@
 
             scene.add(controls.getObject());
 
+            // Listeners de Teclado
             document.addEventListener('keydown', onKeyDown);
             document.addEventListener('keyup', onKeyUp);
             window.addEventListener('resize', onWindowResize);
+
+            // Listeners de Joystick (Toque/Mouse)
+            setupJoystick();
 
             raycaster = new THREE.Raycaster(new THREE.Vector3(), new THREE.Vector3(0, 0, -1), 0, 3);
 
             buildMap();
             setupEntities();
+        }
+
+        function setupJoystick() {
+            const setupBtn = (id, directionVar) => {
+                const btn = document.getElementById(id);
+                const startAction = (e) => {
+                    e.preventDefault(); // Evita scroll/zoom
+                    btn.classList.add('active');
+                    switch(directionVar) {
+                        case 'F': moveForward = true; break;
+                        case 'B': moveBackward = true; break;
+                        case 'L': moveLeft = true; break;
+                        case 'R': moveRight = true; break;
+                    }
+                };
+                const endAction = (e) => {
+                    e.preventDefault();
+                    btn.classList.remove('active');
+                    switch(directionVar) {
+                        case 'F': moveForward = false; break;
+                        case 'B': moveBackward = false; break;
+                        case 'L': moveLeft = false; break;
+                        case 'R': moveRight = false; break;
+                    }
+                };
+
+                btn.addEventListener('mousedown', startAction);
+                btn.addEventListener('touchstart', startAction);
+                btn.addEventListener('mouseup', endAction);
+                btn.addEventListener('mouseleave', endAction);
+                btn.addEventListener('touchend', endAction);
+            };
+
+            setupBtn('btn-up', 'F');
+            setupBtn('btn-down', 'B');
+            setupBtn('btn-left', 'L');
+            setupBtn('btn-right', 'R');
         }
 
         function startGamePlay() {
@@ -322,7 +399,6 @@
         function nextDay() {
             gameState.day++;
             if(gameState.day > 7) {
-                // Zerou o jogo
                 triggerWinGame();
                 return;
             }
@@ -330,7 +406,6 @@
         }
 
         function resetLevel() {
-            // Reinicia variaveis do dia
             gameState.temp = 50;
             gameState.codesFound = [];
             gameState.isPaused = false;
@@ -338,31 +413,26 @@
             gameState.inDoor = false;
             gameState.gameOver = false;
             
-            // Reseta Timers
             timers.monitor = 0;
             timers.stalker = 0;
             timers.stalkerActiveTimer = 0;
 
-            // Gera novos codigos
             generateCode();
             
-            // Reseta Cadernos (Visiveis)
             notebooks.forEach(nb => {
                 nb.visible = true;
                 nb.userData.collected = false;
             });
 
-            // Reseta Posição Jogador
-            controls.getObject().position.set(0, 1.6, 0); // Centro
+            controls.getObject().position.set(0, 1.6, 0); 
             
-            // Reseta Posição Corvo
+            // Reset Entidades
             crowGroup.position.set(0, -50, 0);
+            monitorGroup.position.set(0, -50, 0);
 
-            // Reseta Blusa (Assume que player começa com ela)
             gameState.hasJacket = true;
             if(jacketObj) jacketObj.visible = false;
 
-            // UI Updates
             updateHUD();
             document.getElementById('day-val').innerText = gameState.day;
             showMessage(`DIA ${gameState.day} INICIADO`);
@@ -469,11 +539,92 @@
             return group;
         }
 
+        function createMonitorModel() {
+            const group = new THREE.Group();
+            // Materiais
+            const skinMat = new THREE.MeshStandardMaterial({ color: 0xffccaa }); // Pele
+            const shirtMat = new THREE.MeshStandardMaterial({ color: 0xffffff }); // Camisa Branca
+            const pantsMat = new THREE.MeshStandardMaterial({ color: 0x222222 }); // Calça Preta
+            const blackMat = new THREE.MeshBasicMaterial({ color: 0x000000 });
+
+            // Cabeça Careca
+            const headGeo = new THREE.SphereGeometry(0.25, 16, 16);
+            const head = new THREE.Mesh(headGeo, skinMat);
+            head.position.y = 1.7;
+            group.add(head);
+
+            // Olhos
+            const eyeGeo = new THREE.SphereGeometry(0.03, 8, 8);
+            const eyeL = new THREE.Mesh(eyeGeo, blackMat);
+            eyeL.position.set(0.1, 1.75, 0.22);
+            group.add(eyeL);
+            const eyeR = new THREE.Mesh(eyeGeo, blackMat);
+            eyeR.position.set(-0.1, 1.75, 0.22);
+            group.add(eyeR);
+
+            // Nariz
+            const noseGeo = new THREE.ConeGeometry(0.03, 0.1, 8);
+            const nose = new THREE.Mesh(noseGeo, skinMat);
+            nose.position.set(0, 1.7, 0.25);
+            nose.rotation.x = Math.PI / 2;
+            group.add(nose);
+
+            // Tronco
+            const torsoGeo = new THREE.BoxGeometry(0.5, 0.7, 0.3);
+            const torso = new THREE.Mesh(torsoGeo, shirtMat);
+            torso.position.y = 1.25;
+            group.add(torso);
+
+            // Braços (Pivôs no ombro)
+            const armGeo = new THREE.CylinderGeometry(0.08, 0.08, 0.7);
+            
+            const armLGroup = new THREE.Group();
+            armLGroup.position.set(0.35, 1.55, 0);
+            const armL = new THREE.Mesh(armGeo, shirtMat);
+            armL.position.y = -0.35;
+            armLGroup.add(armL);
+            group.add(armLGroup);
+            monitorLimbs.push(armLGroup);
+
+            const armRGroup = new THREE.Group();
+            armRGroup.position.set(-0.35, 1.55, 0);
+            const armR = new THREE.Mesh(armGeo, shirtMat);
+            armR.position.y = -0.35;
+            armRGroup.add(armR);
+            group.add(armRGroup);
+            monitorLimbs.push(armRGroup);
+
+            // Pernas (Pivôs no quadril)
+            const legGeo = new THREE.CylinderGeometry(0.1, 0.08, 0.9);
+
+            const legLGroup = new THREE.Group();
+            legLGroup.position.set(0.15, 0.9, 0);
+            const legL = new THREE.Mesh(legGeo, pantsMat);
+            legL.position.y = -0.45;
+            legLGroup.add(legL);
+            group.add(legLGroup);
+            monitorLimbs.push(legLGroup);
+
+            const legRGroup = new THREE.Group();
+            legRGroup.position.set(-0.15, 0.9, 0);
+            const legR = new THREE.Mesh(legGeo, pantsMat);
+            legR.position.y = -0.45;
+            legRGroup.add(legR);
+            group.add(legRGroup);
+            monitorLimbs.push(legRGroup);
+
+            return group;
+        }
+
         function setupEntities() {
             crowGroup = createCrowModel();
             crowGroup.position.set(0, -50, 0); 
             crowGroup.scale.set(1.5, 1.5, 1.5);
             scene.add(crowGroup);
+
+            monitorGroup = createMonitorModel();
+            monitorGroup.position.set(0, -50, 0);
+            scene.add(monitorGroup);
         }
 
         // --- CONTROLES ---
@@ -596,18 +747,33 @@
         function updateTimers(delta) {
             if (gameState.isPaused || gameState.gameOver) return;
 
+            // --- MONITOR LOGIC ---
             timers.monitor += delta;
             const monitorWarn = document.getElementById('monitor-warning');
-            if (timers.monitor > (GAME_CONFIG.monitorCycle - 2) && timers.monitor < GAME_CONFIG.monitorCycle) {
+            
+            // Faltam 5 segundos: Spawnar Monitor
+            const spawnTime = GAME_CONFIG.monitorCycle - 5;
+            
+            if (timers.monitor > spawnTime && timers.monitor < GAME_CONFIG.monitorCycle) {
+                // Se ele ainda não está visível, spawna
+                if (monitorGroup.position.y < -10) {
+                     spawnMonitor();
+                }
+                // Animação e Movimento do Monitor
+                updateMonitorLogic(delta);
                 monitorWarn.style.display = 'block';
             } else {
                 monitorWarn.style.display = 'none';
+                if(timers.monitor < spawnTime) monitorGroup.position.y = -50; // Esconde se ressetou
             }
+
             if (timers.monitor >= GAME_CONFIG.monitorCycle) {
                 triggerMonitorEvent();
                 timers.monitor = 0;
+                monitorGroup.position.y = -50; // Esconde após julgar
             }
 
+            // --- CROW LOGIC ---
             if (timers.stalkerActiveTimer > 0) {
                 timers.stalkerActiveTimer -= delta;
                 updateCrowLogic(delta);
@@ -624,14 +790,50 @@
             }
         }
 
+        function spawnMonitor() {
+             // Spawna na frente do jogador, mas um pouco longe
+             const dir = new THREE.Vector3();
+             camera.getWorldDirection(dir);
+             dir.y = 0; dir.normalize();
+             
+             // Posição: 15 unidades na frente
+             monitorGroup.position.copy(camera.position).add(dir.multiplyScalar(15));
+             monitorGroup.position.y = 0;
+             monitorGroup.lookAt(camera.position);
+             monitorGroup.visible = true;
+        }
+
+        function updateMonitorLogic(delta) {
+            // Monitor anda na direção do jogador
+            monitorGroup.lookAt(camera.position.x, 0, camera.position.z);
+            
+            // Move se estiver longe (> 2 unidades)
+            const dist = monitorGroup.position.distanceTo(camera.position);
+            if(dist > 2.5) {
+                const dir = new THREE.Vector3().subVectors(camera.position, monitorGroup.position).normalize();
+                dir.y = 0; // Não voa
+                monitorGroup.position.add(dir.multiplyScalar(3.0 * delta)); // Velocidade 3.0
+
+                // Animação simples de braços e pernas
+                const time = performance.now() * 0.01;
+                monitorLimbs[0].rotation.x = Math.sin(time) * 0.5; // Braço E
+                monitorLimbs[1].rotation.x = -Math.sin(time) * 0.5; // Braço D
+                monitorLimbs[2].rotation.x = -Math.sin(time) * 0.5; // Perna E
+                monitorLimbs[3].rotation.x = Math.sin(time) * 0.5; // Perna D
+            } else {
+                // Parado, braços cruzados ou normal
+                monitorLimbs.forEach(l => l.rotation.x = 0);
+            }
+        }
+
         function triggerMonitorEvent() {
             let msg = "";
             let safe = !gameState.hasJacket; 
             if (safe) {
-                msg = "MONITOR: Muito bem, uniforme correto.";
+                msg = "HELITON: Muito bem, uniforme correto.";
                 showMessage(msg);
             } else {
-                msg = "MONITOR: TIRA ESSA BLUSA! (-2 Vidas)";
+                msg = "HELITON: TIRA ESSA BLUSA! (-2 Vidas)";
                 showMessage(msg);
                 takeDamage(2);
             }
