@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SALA X - Sobrevivência Escolar (PC)</title>
+    <title>SALA X - Sobrevivência Escolar (99 DIAS)</title>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=VT323&display=swap');
 
@@ -12,6 +12,13 @@
         /* HUD e UI */
         #ui-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; }
         
+        /* Vignette de Pânico/Dano */
+        #damage-overlay {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: radial-gradient(circle, transparent 50%, red 150%);
+            opacity: 0; transition: opacity 0.2s; pointer-events: none;
+        }
+
         #crosshair {
             position: absolute; top: 50%; left: 50%; width: 20px; height: 20px;
             background: transparent; border: 2px solid lime; border-radius: 50%;
@@ -23,33 +30,38 @@
             border: 2px solid white; color: white; font-size: 24px;
         }
 
-        #stats-hud { bottom: 20px; left: 20px; width: 250px; }
-        #temp-bar-bg { width: 100%; height: 20px; background: #333; margin-top: 5px; border: 1px solid #fff; }
-        #temp-bar-fill { height: 100%; width: 50%; background: orange; transition: width 0.2s, background 0.2s; }
+        #stats-hud { bottom: 20px; left: 20px; width: 280px; pointer-events: auto; }
         
-        #day-hud { top: 20px; right: 20px; font-size: 40px; color: lime; text-align: right; }
+        .bar-container { width: 100%; height: 15px; background: #333; margin-top: 2px; margin-bottom: 5px; border: 1px solid #fff; position: relative; }
+        .bar-fill { height: 100%; width: 50%; transition: width 0.1s; }
+        
+        #temp-fill { background: orange; }
+        #stamina-fill { background: cyan; width: 100%; }
+        #panic-fill { background: purple; width: 0%; }
+
+        #day-hud { top: 20px; right: 20px; font-size: 50px; color: lime; text-align: right; text-shadow: 0 0 10px lime; }
 
         #message-area {
             position: absolute; top: 20%; left: 50%; transform: translate(-50%, 0);
             color: yellow; font-size: 32px; text-shadow: 2px 2px #000; text-align: center;
-            display: none;
+            display: none; z-index: 15;
         }
 
         #monitor-warning {
             position: absolute; top: 10%; left: 50%; transform: translate(-50%, 0);
             color: red; font-size: 48px; font-weight: bold; animation: blink 0.5s infinite;
-            display: none; text-transform: uppercase;
+            display: none; text-transform: uppercase; text-shadow: 3px 3px black;
         }
 
         /* Telas de Bloqueio (Interativas) */
         .overlay-screen {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0,0,0,0.95); display: none; flex-direction: column;
+            background: rgba(0,0,0,0.85); display: none; flex-direction: column;
             align-items: center; justify-content: center; color: white; z-index: 20;
             pointer-events: auto;
         }
 
-        #start-screen { display: flex; background: #111; }
+        #start-screen { display: flex; background: #111; opacity: 1; }
         h1 { font-size: 80px; margin: 0; color: lime; text-shadow: 4px 4px #000; }
         button {
             background: #333; color: white; border: 2px solid white; 
@@ -61,6 +73,7 @@
         .minigame-options { display: flex; gap: 10px; margin-top: 10px; flex-wrap: wrap; justify-content: center; }
         .hint-btn { background: #0044aa; font-size: 18px; padding: 10px; width: 120px; }
 
+        #math-screen { background: rgba(0,0,0,0.6); } /* Fundo mais transparente para ver o jogo rodando */
         #math-screen input { font-size: 30px; padding: 5px; width: 100px; text-align: center; }
         
         #door-pad { 
@@ -92,6 +105,7 @@
 
     <!-- UI LAYER -->
     <div id="ui-layer">
+        <div id="damage-overlay"></div>
         <div id="crosshair"></div>
         
         <div id="monitor-warning">⚠ HELITON SE APROXIMA! ⚠</div>
@@ -101,12 +115,20 @@
 
         <div id="stats-hud" class="hud-panel">
             <div>VIDAS: <span id="lives-display" style="color:red">❤❤❤</span></div>
-            <div style="margin-top: 10px;">TEMPERATURA: <span id="temp-val">50%</span></div>
-            <div id="temp-bar-bg"><div id="temp-bar-fill"></div></div>
-            <div style="margin-top: 10px; font-size: 18px; color: #aaa;">
-                [W,A,S,D] Mover <br>
-                [I] ou [Q] Soltar/Pegar Blusa <br>
-                [E] Interagir/Esconder
+            
+            <div style="font-size: 20px;">TEMPERATURA: <span id="temp-val">50%</span></div>
+            <div class="bar-container"><div id="temp-fill" class="bar-fill"></div></div>
+            
+            <div style="font-size: 20px;">FÔLEGO:</div>
+            <div class="bar-container"><div id="stamina-fill" class="bar-fill"></div></div>
+
+            <div style="font-size: 20px;">PÂNICO:</div>
+            <div class="bar-container"><div id="panic-fill" class="bar-fill"></div></div>
+
+            <div style="margin-top: 10px; font-size: 16px; color: #aaa;">
+                [WASD] Mover [SHIFT] Correr <br>
+                [MOUSE] Olhar [F] Lanterna <br>
+                [I/Q] Blusa [E] Interagir
             </div>
             <div style="margin-top: 5px; color: yellow;" id="code-collection">Códigos: _ _ _ _</div>
         </div>
@@ -114,27 +136,28 @@
 
     <!-- START SCREEN -->
     <div id="start-screen" class="overlay-screen">
-        <h1>SALA X</h1>
-        <p>Regras: Sobreviva 7 DIAS. Fuja do Corvo Darci.</p>
-        <p>O monitor Heliton fiscaliza uniformes.</p>
-        <button id="btn-start">COMEÇAR DIA 1</button>
+        <h1>SALA X: 99 DIAS</h1>
+        <p>Objetivo: Sobreviva até o dia 99.</p>
+        <p>ATENÇÃO: O jogo NÃO PAUSA ao abrir cadernos.</p>
+        <p>Use Máquinas de Refri para acalmar o Pânico.</p>
+        <button id="btn-start">COMEÇAR PESADELO</button>
     </div>
 
     <!-- MATH SCREEN -->
     <div id="math-screen" class="overlay-screen">
-        <h2 style="color: yellow">RESOLVA PARA PEGAR O CÓDIGO!</h2>
-        <div id="math-problem" style="font-size: 40px; margin: 20px;">2 + 2 = ?</div>
-        <div id="hint-text" style="color: cyan; margin-bottom: 10px; font-size: 24px; min-height: 30px;"></div>
+        <h2 style="color: yellow; background: black; padding: 5px;">RESOLVA RÁPIDO! (TEMPO REAL)</h2>
+        <div id="math-problem" style="font-size: 40px; margin: 20px; background: black; padding: 5px;">2 + 2 = ?</div>
+        <div id="hint-text" style="color: cyan; margin-bottom: 10px; font-size: 24px; min-height: 30px; background: black;"></div>
         <input type="number" id="math-input" autofocus>
         <button id="btn-submit-math">RESPONDER</button>
         
         <div id="minigame-selection" class="minigame-options" style="display:none;">
-            <div style="width:100%; text-align:center; color:#aaa;">PRECISA DE AJUDA? JOGUE:</div>
+            <div style="width:100%; text-align:center; color:#aaa; background: black;">PRECISA DE AJUDA?</div>
             <button class="hint-btn" onclick="initMemoryGame()">MEMÓRIA</button>
             <button class="hint-btn" onclick="initPacmanGame()">PAC-MAN</button>
             <button class="hint-btn" onclick="initSnakeGame()">COBRINHA</button>
         </div>
-        <div style="margin-top:20px; color: #aaa; font-size: 18px;">Se errar, o caderno fecha.</div>
+        <div style="margin-top:20px; color: #aaa; font-size: 18px; background: black;">O mundo continua rodando lá fora...</div>
     </div>
 
     <!-- MEMORY GAME SCREEN -->
@@ -196,21 +219,26 @@
         import { PointerLockControls } from 'three/addons/controls/PointerLockControls.js';
 
         // --- CONFIGURAÇÕES GERAIS ---
-        const GAME_CONFIG = {
-            walkSpeed: 15.0, 
+        let GAME_CONFIG = {
+            baseWalkSpeed: 10.0,
+            runSpeed: 18.0,
             tempRateUp: 1.5,    
             tempRateDown: 0.8,  
-            stalkerSpeed: 4.0, 
+            stalkerSpeed: 4.0, // Darci
+            renanSpeed: 6.0,   // Renan
             monitorCycle: 30,     
             stalkerCycle: 15,   
-            stalkerDuration: 8 
+            stalkerDuration: 8,
+            renanCycle: 15,    
+            renanDuration: 6
         };
 
+        // 3=Caderno, 2=Armario, 4=Vending Machine
         const mapGrid = [
             [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
             [1,3,0,0,1,0,0,0,0,0,1,0,0,2,1], 
             [1,2,0,0,0,0,0,0,0,0,0,0,0,3,1], 
-            [1,0,0,0,1,0,0,0,0,0,1,0,0,0,1],
+            [1,0,0,0,1,0,4,0,4,0,1,0,0,0,1], // Vending machines no corredor
             [1,1,0,1,1,0,0,0,0,0,1,1,0,1,1], 
             [1,0,0,0,1,0,2,0,2,0,1,0,0,0,1], 
             [1,0,2,0,0,0,0,0,0,0,0,0,2,0,1],
@@ -232,22 +260,30 @@
             day: 1,
             lives: 3,
             temp: 50,           
+            stamina: 100,
+            panic: 0, // 0 a 100
             hasJacket: true,
             codesFound: [],     
             finalCode: [],      
             currentMathAnswer: 0,
-            isPaused: false,
+            isPaused: false, // Pausa real (ex: game over ou transição)
             isHiding: false,
             inDoor: false,
             gameOver: false,
             activeNotebook: null,
-            activeMinigame: null
+            activeMinigame: null,
+            flashlightOn: false,
+            isSprinting: false,
+            isSlowed: false 
         };
 
         let timers = {
             monitor: 0,
             stalker: 0,
-            stalkerActiveTimer: 0
+            renan: 0, 
+            stalkerActiveTimer: 0,
+            renanActiveTimer: 0,
+            slowEffect: 0
         };
 
         // --- VARIÁVEIS THREE.JS ---
@@ -256,28 +292,28 @@
         let moveForward = false, moveBackward = false, moveLeft = false, moveRight = false;
         let prevTime = performance.now();
         const velocity = new THREE.Vector3();
-        const direction = new THREE.Vector3();
         
+        // Luzes
+        let ambientLight, playerLight, flashLight;
+
         // Entidades
         let jacketObj = null; 
         let crowGroup = null; 
         let crowWings = []; 
         let monitorGroup = null; 
         let monitorLimbs = []; 
+        let renanGroup = null; 
+        let renanLimbs = [];   
         let lockers = []; 
         let walls = [];   
         let notebooks = []; 
+        let vendingMachines = []; // Maquinas de refri
+        let traps = []; 
         let exitDoor = null;
 
         // --- VARIÁVEIS MINIGAMES ---
-        let snakeGame = {
-            snake: [], dir: {x:1, y:0}, food: {x:0, y:0}, score: 0, interval: null
-        };
-        let pacmanGame = {
-            pos: {x:1, y:1}, dir: {x:0, y:0}, nextDir: {x:0, y:0},
-            ghost: {x:8, y:8}, ghostDir: {x:0, y:0}, ghostTimer: 0,
-            grid: [], score: 0, totalDots: 0, interval: null
-        };
+        let snakeGame = { snake: [], dir: {x:1, y:0}, food: {x:0, y:0}, score: 0, interval: null };
+        let pacmanGame = { pos: {x:1, y:1}, dir: {x:0, y:0}, nextDir: {x:0, y:0}, ghost: {x:8, y:8}, ghostTimer: 0, grid: [], score: 0, totalDots: 0, interval: null };
 
         // --- ASSETS PROCEDURAIS ---
         function createTexture(color, text) {
@@ -302,7 +338,9 @@
             jacket: createTexture('#0000FF', '🧥'),
             notebook: createTexture('#00AA00', '📓'),
             locker: createTexture('#553311', '🚪'),
-            door: createTexture('#888', 'EXIT')
+            door: createTexture('#888', 'EXIT'),
+            trap: createTexture('#AA00AA', 'XXX'),
+            vending: createTexture('#00AAAA', '🥤') // Vending Machine
         };
 
         // --- INICIALIZAÇÃO ---
@@ -314,11 +352,19 @@
             camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
             camera.position.y = 1.6;
 
-            const light = new THREE.HemisphereLight(0xeeeeff, 0x777788, 0.75);
-            light.position.set(0.5, 1, 0.75);
-            scene.add(light);
-            const pointLight = new THREE.PointLight(0xffaa00, 1, 15);
-            camera.add(pointLight);
+            ambientLight = new THREE.HemisphereLight(0xeeeeff, 0x777788, 0.75);
+            ambientLight.position.set(0.5, 1, 0.75);
+            scene.add(ambientLight);
+
+            playerLight = new THREE.PointLight(0xffaa00, 0.5, 5);
+            camera.add(playerLight);
+
+            flashLight = new THREE.SpotLight(0xffffff, 0, 40, Math.PI/4, 0.5, 1);
+            flashLight.position.set(0, 0, 0);
+            flashLight.target.position.set(0, 0, -1);
+            camera.add(flashLight);
+            camera.add(flashLight.target);
+
             scene.add(camera);
 
             renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -329,16 +375,8 @@
             controls = new PointerLockControls(camera, document.body);
             scene.add(controls.getObject());
             
-            // Travar mouse ao clicar no Start
             document.getElementById('btn-start').addEventListener('click', startGamePlay);
             document.getElementById('btn-next-day').addEventListener('click', nextDay);
-
-            // Re-travar mouse ao clicar na tela se o jogo estiver rodando
-            document.body.addEventListener('click', () => {
-                if(!gameState.gameOver && !gameState.isPaused && !gameState.inDoor && gameState.day > 0) {
-                    controls.lock();
-                }
-            });
 
             document.addEventListener('keydown', onKeyDown);
             document.addEventListener('keyup', onKeyUp);
@@ -349,7 +387,6 @@
             buildMap();
             setupEntities();
             
-            // Expor funções para o HTML
             window.initMemoryGame = initMemoryGame;
             window.initPacmanGame = initPacmanGame;
             window.initSnakeGame = initSnakeGame;
@@ -366,26 +403,58 @@
 
         function nextDay() {
             gameState.day++;
-            if(gameState.day > 7) {
+            if(gameState.day > 99) {
                 triggerWinGame();
                 return;
             }
             startGamePlay();
         }
 
+        function applyDayDifficulty() {
+            const factor = Math.min(gameState.day, 99) / 100;
+            
+            GAME_CONFIG.stalkerSpeed = 4.0 + (factor * 6.0);
+            GAME_CONFIG.renanSpeed = 6.0 + (factor * 4.0); 
+            GAME_CONFIG.monitorCycle = Math.max(10, 30 - (factor * 20));
+            GAME_CONFIG.stalkerCycle = Math.max(5, 15 - (factor * 10));
+            GAME_CONFIG.renanCycle = 15;
+            
+            if (gameState.day >= 5) {
+                let darkness = Math.min((gameState.day - 5) * 0.01, 0.9);
+                ambientLight.intensity = 0.75 - (darkness * 0.7);
+                scene.fog.density = 0.02 + (darkness * 0.08);
+            } else {
+                ambientLight.intensity = 0.75;
+                scene.fog.density = 0.02;
+            }
+
+            if (gameState.day >= 10 && Math.random() < 0.3) {
+                ambientLight.intensity = 0.05;
+                showMessage("AVISO: FALHA NO SISTEMA ELÉTRICO!");
+            }
+        }
+
         function resetLevel() {
             gameState.temp = 50;
+            gameState.stamina = 100;
+            gameState.panic = 0;
             gameState.codesFound = [];
             gameState.isPaused = false;
             gameState.isHiding = false;
             gameState.inDoor = false;
             gameState.gameOver = false;
+            gameState.isSlowed = false;
             
             timers.monitor = 0;
             timers.stalker = 0;
+            timers.renan = 0;
             timers.stalkerActiveTimer = 0;
+            timers.renanActiveTimer = 0;
+            timers.slowEffect = 0;
 
+            applyDayDifficulty();
             generateCode();
+            spawnTraps();
             
             notebooks.forEach(nb => {
                 nb.visible = true;
@@ -397,6 +466,7 @@
             
             crowGroup.position.set(0, -50, 0);
             monitorGroup.position.set(0, -50, 0);
+            renanGroup.position.set(0, -50, 0);
 
             gameState.hasJacket = true;
             if(jacketObj) jacketObj.visible = false;
@@ -413,6 +483,31 @@
             updateCodeDisplay();
         }
 
+        function spawnTraps() {
+            traps.forEach(t => scene.remove(t));
+            traps = [];
+
+            if(gameState.day < 8) return;
+
+            const trapCount = Math.min(gameState.day, 20); 
+            const trapGeo = new THREE.PlaneGeometry(3, 3);
+            const trapMat = new THREE.MeshBasicMaterial({ map: textures.trap, transparent: true, opacity: 0.8 });
+
+            for(let i=0; i<trapCount; i++) {
+                let x = (Math.random() * 100) - 50;
+                let z = (Math.random() * 100) - 50;
+                if(Math.abs(x) < 5 && Math.abs(z) < 5) continue; 
+
+                const trap = new THREE.Mesh(trapGeo, trapMat);
+                trap.rotation.x = -Math.PI / 2;
+                trap.position.set(x, 0.05, z); 
+                scene.add(trap);
+                
+                const box = new THREE.Box3().setFromObject(trap);
+                traps.push(box);
+            }
+        }
+
         function buildMap() {
             const floorGeo = new THREE.PlaneGeometry(150, 150);
             const floorMat = new THREE.MeshStandardMaterial({ map: textures.floor });
@@ -423,6 +518,7 @@
             const boxGeo = new THREE.BoxGeometry(UNIT_SIZE, UNIT_SIZE, UNIT_SIZE);
             const wallMat = new THREE.MeshStandardMaterial({ map: textures.wall });
             const lockerMat = new THREE.MeshStandardMaterial({ map: textures.locker });
+            const vendingMat = new THREE.MeshStandardMaterial({ map: textures.vending });
 
             for (let z = 0; z < mapGrid.length; z++) {
                 for (let x = 0; x < mapGrid[z].length; x++) {
@@ -443,6 +539,14 @@
                         scene.add(locker);
                         walls.push(new THREE.Box3().setFromObject(locker)); 
                         lockers.push(locker);
+                    } else if (type === 4) { // Vending Machine
+                        const vm = new THREE.Mesh(boxGeo, vendingMat);
+                        vm.scale.set(0.8, 1, 0.8);
+                        vm.position.set(posX, UNIT_SIZE/2, posZ);
+                        vm.userData = { type: 'vending' };
+                        scene.add(vm);
+                        walls.push(new THREE.Box3().setFromObject(vm)); 
+                        vendingMachines.push(vm);
                     } else if (type === 9) {
                         const doorGeo = new THREE.PlaneGeometry(UNIT_SIZE, UNIT_SIZE);
                         const door = new THREE.Mesh(doorGeo, new THREE.MeshBasicMaterial({map: textures.door}));
@@ -572,6 +676,65 @@
             return group;
         }
 
+        function createRenanModel() {
+            const group = new THREE.Group();
+            const skinMat = new THREE.MeshStandardMaterial({ color: 0x8d5524 }); 
+            const shirtMat = new THREE.MeshStandardMaterial({ color: 0x0000AA }); 
+            const pantsMat = new THREE.MeshStandardMaterial({ color: 0x111111 }); 
+            const blackMat = new THREE.MeshBasicMaterial({ color: 0x000000 });
+
+            const headGeo = new THREE.SphereGeometry(0.25, 16, 16);
+            const head = new THREE.Mesh(headGeo, skinMat);
+            head.position.y = 1.7;
+            group.add(head);
+
+            const hairGeo = new THREE.BoxGeometry(0.52, 0.15, 0.52);
+            const hair = new THREE.Mesh(hairGeo, blackMat);
+            hair.position.y = 1.9;
+            group.add(hair);
+
+            const torsoGeo = new THREE.BoxGeometry(0.5, 0.7, 0.3);
+            const torso = new THREE.Mesh(torsoGeo, shirtMat);
+            torso.position.y = 1.25;
+            group.add(torso);
+
+            const armGeo = new THREE.CylinderGeometry(0.08, 0.08, 0.7);
+            const armLGroup = new THREE.Group();
+            armLGroup.position.set(0.35, 1.55, 0);
+            const armL = new THREE.Mesh(armGeo, shirtMat);
+            armL.position.y = -0.35;
+            armLGroup.add(armL);
+            group.add(armLGroup);
+            renanLimbs.push(armLGroup);
+
+            const armRGroup = new THREE.Group();
+            armRGroup.position.set(-0.35, 1.55, 0);
+            const armR = new THREE.Mesh(armGeo, shirtMat);
+            armR.position.y = -0.35;
+            armRGroup.add(armR);
+            group.add(armRGroup);
+            renanLimbs.push(armRGroup);
+
+            const legGeo = new THREE.CylinderGeometry(0.1, 0.08, 0.9);
+            const legLGroup = new THREE.Group();
+            legLGroup.position.set(0.15, 0.9, 0);
+            const legL = new THREE.Mesh(legGeo, pantsMat);
+            legL.position.y = -0.45;
+            legLGroup.add(legL);
+            group.add(legLGroup);
+            renanLimbs.push(legLGroup);
+
+            const legRGroup = new THREE.Group();
+            legRGroup.position.set(-0.15, 0.9, 0);
+            const legR = new THREE.Mesh(legGeo, pantsMat);
+            legR.position.y = -0.45;
+            legRGroup.add(legR);
+            group.add(legRGroup);
+            renanLimbs.push(legRGroup);
+
+            return group;
+        }
+
         function setupEntities() {
             crowGroup = createCrowModel();
             crowGroup.position.set(0, -50, 0); 
@@ -581,6 +744,10 @@
             monitorGroup = createMonitorModel();
             monitorGroup.position.set(0, -50, 0);
             scene.add(monitorGroup);
+
+            renanGroup = createRenanModel();
+            renanGroup.position.set(0, -50, 0);
+            scene.add(renanGroup);
         }
 
         // --- CONTROLES ---
@@ -607,6 +774,8 @@
                 case 'ArrowLeft': case 'KeyA': moveLeft = true; break;
                 case 'ArrowDown': case 'KeyS': moveBackward = true; break;
                 case 'ArrowRight': case 'KeyD': moveRight = true; break;
+                case 'ShiftLeft': case 'ShiftRight': gameState.isSprinting = true; break;
+                case 'KeyF': toggleFlashlight(); break;
                 case 'KeyI': case 'KeyQ': dropJacket(); break;
                 case 'KeyE': interact(); break;
             }
@@ -618,17 +787,24 @@
                 case 'ArrowLeft': case 'KeyA': moveLeft = false; break;
                 case 'ArrowDown': case 'KeyS': moveBackward = false; break;
                 case 'ArrowRight': case 'KeyD': moveRight = false; break;
+                case 'ShiftLeft': case 'ShiftRight': gameState.isSprinting = false; break;
             }
+        }
+
+        function toggleFlashlight() {
+            gameState.flashlightOn = !gameState.flashlightOn;
+            flashLight.intensity = gameState.flashlightOn ? 1.5 : 0;
         }
 
         // --- LÓGICA DE INTERAÇÃO ---
         function interact() {
-            if (gameState.gameOver || gameState.isPaused) return;
-
+            // Se estiver escondido, E sai do esconderijo
             if (gameState.isHiding) {
                 exitHiding();
                 return;
             }
+
+            if (gameState.gameOver || gameState.isPaused) return;
 
             const camDir = new THREE.Vector3();
             camera.getWorldDirection(camDir);
@@ -644,7 +820,7 @@
             }
 
             const activeNotebooks = notebooks.filter(n => n.visible);
-            const interactables = [...lockers, exitDoor, ...activeNotebooks];
+            const interactables = [...lockers, exitDoor, ...activeNotebooks, ...vendingMachines];
             const intersects = raycaster.intersectObjects(interactables);
             
             if (intersects.length > 0 && intersects[0].distance < 3.0) {
@@ -656,8 +832,16 @@
                 } else if (target.userData.type === 'notebook') {
                     gameState.activeNotebook = target;
                     triggerMathEvent();
+                } else if (target.userData.type === 'vending') {
+                    useVendingMachine();
                 }
             }
+        }
+
+        function useVendingMachine() {
+            gameState.stamina = Math.min(100, gameState.stamina + 50);
+            gameState.panic = Math.max(0, gameState.panic - 30);
+            showMessage("Refri gelado! Estamina e Pânico recuperados.");
         }
 
         function dropJacket() {
@@ -698,8 +882,10 @@
             document.getElementById('ui-layer').style.backgroundColor = 'transparent';
         }
 
-        function updateTemperature(delta) {
+        function updateStatus(delta) {
             if (gameState.isPaused || gameState.gameOver) return;
+            
+            // Temperatura
             let change = 0;
             if (gameState.hasJacket) {
                 change = GAME_CONFIG.tempRateUp * delta; 
@@ -709,13 +895,50 @@
             gameState.temp += change;
             if (gameState.temp >= 100) triggerGameOver("INSOLAÇÃO! Você cozinhou.");
             if (gameState.temp <= 0) triggerGameOver("HIPOTERMIA! Você congelou.");
-            const bar = document.getElementById('temp-bar-fill');
+            const bar = document.getElementById('temp-fill');
             const val = document.getElementById('temp-val');
             bar.style.width = gameState.temp + '%';
             val.innerText = Math.floor(gameState.temp) + '%';
             if(gameState.temp > 80) bar.style.backgroundColor = 'red';
             else if(gameState.temp < 20) bar.style.backgroundColor = 'cyan';
             else bar.style.backgroundColor = 'orange';
+
+            // Estamina
+            if (gameState.isSprinting) {
+                gameState.stamina -= 20 * delta; // Gasta rápido
+                if(gameState.stamina < 0) {
+                    gameState.stamina = 0;
+                    gameState.isSprinting = false; // Cansa
+                }
+            } else {
+                gameState.stamina += 10 * delta; // Recupera
+                if(gameState.stamina > 100) gameState.stamina = 100;
+            }
+            document.getElementById('stamina-fill').style.width = gameState.stamina + '%';
+
+            // Pânico e Efeito de Medo
+            // Aumenta se inimigo perto ou escuro
+            let panicRate = -2 * delta; // Recupera naturalmente
+            if (timers.stalkerActiveTimer > 0 || timers.renanActiveTimer > 0) panicRate = 10 * delta; // Inimigo
+            if (ambientLight.intensity < 0.3 && !gameState.flashlightOn) panicRate += 5 * delta; // Escuro
+
+            gameState.panic = Math.max(0, Math.min(100, gameState.panic + panicRate));
+            document.getElementById('panic-fill').style.width = gameState.panic + '%';
+
+            // Camera Shake se pânico alto
+            if (gameState.panic > 50) {
+                const shake = (gameState.panic - 50) * 0.0005;
+                camera.position.x += (Math.random() - 0.5) * shake;
+                camera.position.y += (Math.random() - 0.5) * shake;
+            }
+
+            // Slow effect (Cola)
+            if(timers.slowEffect > 0) {
+                timers.slowEffect -= delta;
+                gameState.isSlowed = true;
+            } else {
+                gameState.isSlowed = false;
+            }
         }
 
         function updateTimers(delta) {
@@ -754,6 +977,22 @@
                 if (timers.stalker >= GAME_CONFIG.stalkerCycle) {
                     activateCrow();
                     timers.stalker = 0;
+                }
+            }
+
+            // --- RENAN LOGIC ---
+            if (timers.renanActiveTimer > 0) {
+                timers.renanActiveTimer -= delta;
+                updateRenanLogic(delta);
+                if (timers.renanActiveTimer <= 0) {
+                    renanGroup.position.y = -50;
+                    showMessage("Renan cansou e foi embora.");
+                }
+            } else {
+                timers.renan += delta;
+                if (timers.renan >= GAME_CONFIG.renanCycle) {
+                    activateRenan();
+                    timers.renan = 0;
                 }
             }
         }
@@ -799,38 +1038,75 @@
             }
         }
 
+        // --- RENAN FUNCTIONS ---
+        function activateRenan() {
+            timers.renanActiveTimer = GAME_CONFIG.renanDuration;
+            showMessage("CUIDADO! RENAN ESTÁ CORRENDO!");
+            
+            // Spawn longe
+            const angle = Math.random() * Math.PI * 2;
+            const radius = 25; 
+            renanGroup.position.x = camera.position.x + Math.cos(angle) * radius;
+            renanGroup.position.z = camera.position.z + Math.sin(angle) * radius;
+            renanGroup.position.y = 0;
+            renanGroup.visible = true;
+        }
+
+        function updateRenanLogic(delta) {
+            if (renanGroup.position.y < -10) return;
+
+            renanGroup.lookAt(camera.position.x, 0, camera.position.z);
+
+            // Corre na direção do player
+            const dir = new THREE.Vector3().subVectors(camera.position, renanGroup.position).normalize();
+            dir.y = 0;
+            renanGroup.position.add(dir.multiplyScalar(GAME_CONFIG.renanSpeed * delta));
+
+            // Animação Rápida
+            const time = performance.now() * 0.02; // Mais rápido que monitor
+            renanLimbs[0].rotation.x = Math.sin(time) * 0.8;
+            renanLimbs[1].rotation.x = -Math.sin(time) * 0.8;
+            renanLimbs[2].rotation.x = -Math.sin(time) * 0.8;
+            renanLimbs[3].rotation.x = Math.sin(time) * 0.8;
+
+            const dist = renanGroup.position.distanceTo(camera.position);
+            if (dist < 1.5) {
+                if (!gameState.isHiding) {
+                    takeDamage(1);
+                    renanGroup.position.y = -50; 
+                    timers.renanActiveTimer = 0; 
+                    showMessage("Renan te atropelou!");
+                }
+            }
+        }
+
         // --- SISTEMA DE MATEMÁTICA ---
         function triggerMathEvent() {
-            gameState.isPaused = true;
-            controls.unlock();
+            // NÃO PAUSA O JOGO (gameState.isPaused = false), apenas destrava o cursor
+            document.exitPointerLock(); 
             
             let problemText = "";
             let finalRes = 0;
 
-            if (gameState.day <= 2) {
+            // DIFICULDADE MATEMÁTICA (SCALING)
+            if (gameState.day <= 5) {
                 const n1 = Math.floor(Math.random()*20);
                 const n2 = Math.floor(Math.random()*20);
-                if (Math.random() > 0.5) {
-                    problemText = `${n1} + ${n2}`;
-                    finalRes = n1 + n2;
-                } else {
-                    const max = Math.max(n1, n2);
-                    const min = Math.min(n1, n2);
-                    problemText = `${max} - ${min}`;
-                    finalRes = max - min;
-                }
-            } else if (gameState.day <= 4) {
-                const n1 = Math.floor(Math.random()*10);
-                const n2 = Math.floor(Math.random()*10);
-                const n3 = Math.floor(Math.random()*10);
+                if(Math.random() > 0.5) { problemText = `${n1} + ${n2}`; finalRes = n1+n2; }
+                else { problemText = `${Math.max(n1,n2)} - ${Math.min(n1,n2)}`; finalRes = Math.max(n1,n2)-Math.min(n1,n2); }
+            } else if (gameState.day <= 20) {
+                const n1 = Math.floor(Math.random()*12);
+                const n2 = Math.floor(Math.random()*12);
+                const n3 = Math.floor(Math.random()*20);
                 problemText = `${n1} x ${n2} + ${n3}`;
                 finalRes = (n1 * n2) + n3;
             } else {
                 const n1 = Math.floor(Math.random()*15);
-                const n2 = Math.floor(Math.random()*15);
-                const n3 = Math.floor(Math.random()*50);
-                problemText = `(${n1} + ${n2}) x 2 - ${n3}`;
-                finalRes = ((n1 + n2) * 2) - n3;
+                const n2 = Math.floor(Math.random()*10);
+                const n3 = Math.floor(Math.random()*5);
+                const n4 = Math.floor(Math.random()*50);
+                problemText = `(${n1} x ${n2}) - (${n3} x 2) + ${n4}`;
+                finalRes = (n1 * n2) - (n3 * 2) + n4;
             }
 
             gameState.currentMathAnswer = finalRes;
@@ -873,7 +1149,6 @@
 
         function closeMathScreen() {
             document.getElementById('math-screen').style.display = 'none';
-            gameState.isPaused = false;
             if(!gameState.gameOver) controls.lock();
         }
 
@@ -1211,14 +1486,14 @@
         function takeDamage(amount) {
             gameState.lives -= amount;
             updateHUD();
+            
+            // Visual feedback
+            const overlay = document.getElementById('damage-overlay');
+            overlay.style.opacity = 1;
+            setTimeout(() => { overlay.style.opacity = 0; }, 500);
+
             if (gameState.lives <= 0) {
                 triggerGameOver("Suas vidas acabaram.");
-            } else {
-                const overlay = document.getElementById('ui-layer');
-                overlay.style.backgroundColor = 'rgba(255,0,0,0.5)';
-                setTimeout(() => { 
-                    overlay.style.backgroundColor = gameState.isHiding ? 'rgba(0,0,0,0.8)' : 'transparent'; 
-                }, 200);
             }
         }
 
@@ -1263,9 +1538,9 @@
             gameState.gameOver = true; 
             controls.unlock();
             document.getElementById('end-screen').style.display = 'flex';
-            document.getElementById('end-title').innerText = "VITÓRIA SUPREMA!";
+            document.getElementById('end-title').innerText = "LENDA VIVA!";
             document.getElementById('end-title').style.color = "lime";
-            document.getElementById('end-reason').innerText = "Você sobreviveu aos 7 dias e derrotou o sistema escolar.";
+            document.getElementById('end-reason').innerText = "VOCÊ SOBREVIVEU AOS 99 DIAS DA SALA X.";
             document.getElementById('btn-restart').style.display = 'block';
             document.getElementById('btn-restart').innerText = "JOGAR TUDO DE NOVO";
             document.getElementById('btn-next-day').style.display = 'none';
@@ -1285,7 +1560,7 @@
         window.closeDoorScreen = function() {
             document.getElementById('door-screen').style.display = 'none';
             gameState.inDoor = false;
-            controls.lock();
+            if(!gameState.gameOver) controls.lock();
         };
 
         let currentDoorInput = "";
@@ -1343,9 +1618,17 @@
             const time = performance.now();
             const delta = (time - prevTime) / 1000;
 
+            // 1. Lógica de jogo (Roda sempre, exceto se pausado explicitamente ou Game Over)
+            if (!gameState.isPaused && !gameState.gameOver) {
+                updateStatus(delta);
+                updateTimers(delta);
+            }
+
+            // 2. Movimentação do Jogador (Apenas se controls.isLocked e não pausado)
+            // Nota: Ao abrir caderno, controls.isLocked é falso, então o player para de andar,
+            // mas o mundo (item 1) continua rodando.
             if (controls.isLocked && !gameState.isPaused && !gameState.gameOver) {
                 
-                // Helper vectors (define outside loop to avoid GC if possible, but inside is fine for clarity in this single file)
                 const directionVector = new THREE.Vector3();
                 const sideVector = new THREE.Vector3();
                 
@@ -1355,35 +1638,53 @@
 
                 sideVector.copy(directionVector);
                 sideVector.cross(camera.up);
-                // sideVector is now pointing Right relative to camera look
 
                 const oldPos = controls.getObject().position.clone();
 
-                // Forward/Back
-                if (moveForward) {
-                    controls.getObject().position.addScaledVector(directionVector, GAME_CONFIG.walkSpeed * delta);
+                // Velocidade
+                let currentSpeed = GAME_CONFIG.baseWalkSpeed;
+                if (gameState.isSprinting && gameState.stamina > 0) {
+                    currentSpeed = GAME_CONFIG.runSpeed;
                 }
-                if (moveBackward) {
-                    controls.getObject().position.addScaledVector(directionVector, -GAME_CONFIG.walkSpeed * delta);
+                if (gameState.isSlowed) {
+                    currentSpeed *= 0.3;
                 }
 
-                // Left/Right
+                // Input
+                if (moveForward) {
+                    controls.getObject().position.addScaledVector(directionVector, currentSpeed * delta);
+                }
+                if (moveBackward) {
+                    controls.getObject().position.addScaledVector(directionVector, -currentSpeed * delta);
+                }
                 if (moveRight) {
-                    controls.getObject().position.addScaledVector(sideVector, GAME_CONFIG.walkSpeed * delta);
+                    controls.getObject().position.addScaledVector(sideVector, currentSpeed * delta);
                 }
                 if (moveLeft) {
-                    controls.getObject().position.addScaledVector(sideVector, -GAME_CONFIG.walkSpeed * delta);
+                    controls.getObject().position.addScaledVector(sideVector, -currentSpeed * delta);
                 }
 
                 const playerPos = controls.getObject().position;
                 
+                // Colisão Paredes
                 for(let wallBox of walls) {
                     if(wallBox.containsPoint(playerPos)) {
                         controls.getObject().position.copy(oldPos);
                     }
                 }
-                updateTemperature(delta);
-                updateTimers(delta);
+
+                // Colisão Armadilhas
+                let steppedOnTrap = false;
+                for(let trapBox of traps) {
+                    if(playerPos.x > trapBox.min.x && playerPos.x < trapBox.max.x && 
+                       playerPos.z > trapBox.min.z && playerPos.z < trapBox.max.z) {
+                        steppedOnTrap = true;
+                    }
+                }
+                if(steppedOnTrap && !gameState.isSlowed) {
+                    timers.slowEffect = 3.0; 
+                    showMessage("PISOU NA COLA! (Lento)");
+                }
             }
             prevTime = time;
             renderer.render(scene, camera);
